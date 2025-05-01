@@ -1,12 +1,11 @@
 const groupService = require('../services/group.service');
-const { sendEmail } = require('../services/email.service'); // Import the email service
+const { sendEmail } = require('../services/email.service'); 
 const AppError = require('../utils/errors');
 
 
 const createGroup = async (req, res, next) => {
     try {
-         // --- SECURITY WARNING ---
-         // In a real app, get adminUserId from req.user (set by auth middleware)
+        
         const { adminUserId, groupName, contributionAmount, frequency, maxMembers, description } = req.body;
         if (!adminUserId) {
              throw new AppError('Admin User ID is required (Insecure - Should come from auth)', 400);
@@ -28,7 +27,7 @@ const createGroup = async (req, res, next) => {
 const activateGroup = async (req, res, next) => {
     try {
         const { groupId } = req.params;
-        const { adminUserId } = req.body; // Admin User ID should ideally come from the authenticated user (auth)
+        const { adminUserId } = req.body; 
 
         if (!adminUserId) {
             throw new AppError('Admin User ID is required (Insecure - Should come from auth)', 400);
