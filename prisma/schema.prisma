@@ -1,0 +1,154 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  userId       String  @id @unique
+  name         String
+  email        String  @unique
+  dateOfBirth  DateTime @db.Date // Store only the date part
+  passwordHash String
+  role         Role    @default(MEMBER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  adminGroups  Group[] @relation("AdminGroups") // Groups where this user is admin
+  memberships  Membership[]
+  payments     Payment[]
+  invitationsSent Invitation[] @relation("AdminInvitations") // Invitations sent by this user if admin
+  lotteryWins  Lottery[] // Lotteries won by this user
+
+  @@map("users")
+}
+
+model Group {
+  groupId            String   @id @default(uuid())
+  groupName          String
+  contributionAmount Float
+  frequency          Frequency
+  maxMembers         Int
+  description        String?
+  status             GroupStatus @default(PENDING) // Start as PENDING
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  currentCycleStartDate DateTime? // Set when group becomes active
+  adminUserId String
+  admin       User   @relation("AdminGroups", fields: [adminUserId], references: [userId])
+
+  memberships Membership[]
+  invitations Invitation[]
+  payments    Payment[]
+  lotteries   Lottery[]
+
+  @@map("groups")
+}
+
+model Membership {
+  membershipId                String @id @default(uuid())
+  joinDate                    DateTime @default(now())
+  hasWonLottery               Boolean  @default(false)
+  isActive                    Boolean  @default(true) // To potentially deactivate members
+  nextPaymentDueDate       DateTime? // Set when group becomes active
+  cyclePaymentCount           Int @default(0) // Number of payments made in the current cycle like 5/8 total members 8 in group
+  userId String
+  user   User   @relation(fields: [userId], references: [userId])
+
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [groupId])
+
+  payments Payment[] // Payments made through this membership
+  @@unique([userId, groupId]) // A user can be a member of a group only once
+  @@map("memberships")
+}
+  
+
+
+model Invitation {
+  invitationId     String   @id @default(uuid())
+  invitedUserEmail String
+  invitationCode   String   @unique
+  status           InvitationStatus @default(PENDING)
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime?
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [groupId])
+  adminUserId String // Who sent the invite
+  admin       User   @relation("AdminInvitations", fields: [adminUserId], references: [userId])
+  @@map("invitations")
+}
+
+model Payment {
+  paymentId      String   @id @default(uuid())
+  amount         Float
+  paymentDate    DateTime @default(now())
+  transactionId  String   @unique // Ensure idempotency via Stripe Tx ID
+  status         String   // e.g., 'succeeded' from Stripe
+  cycleIdentifier String   // e.g., "YYYY-MM-DD" start date of the cycle
+  membershipId String
+  membership   Membership @relation(fields: [membershipId], references: [membershipId])
+  userId String
+  user   User   @relation(fields: [userId], references: [userId])
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [groupId])
+  paymentMethod String?
+  @@map("payments")
+}
+
+model Lottery {
+  lotteryId       String   @id @default(uuid())
+  cycleIdentifier String   // Identifies the cycle this lottery was for
+  potAmount       Float
+  lotteryDate     DateTime @default(now())
+
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [groupId])
+
+  winningUserId String
+  winningUser   User   @relation(fields: [winningUserId], references: [userId])
+
+  @@map("lotteries")
+}
+
+// --- Enums ---
+
+enum Role {
+  MEMBER
+  ADMIN
+}
+
+enum Frequency {
+  WEEKLY
+  BI_WEEKLY // Use underscore for Prisma convention, maps to 'bi-weekly' in code/DB often
+  MONTHLY
+}
+
+enum GroupStatus {
+  PENDING   // Initial state before activation
+  ACTIVE    // Group is running cycles
+  COMPLETED // All members have won the lottery
+  CANCELLED // If needed
+}
+
+enum PaymentStatus {
+  PAID
+  UNPAID
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  DECLINED // Optional
+  CANCELLED // Optional
+}
