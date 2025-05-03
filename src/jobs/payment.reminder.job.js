@@ -1,83 +1,112 @@
 const cron = require('node-cron');
 const prisma = require('../utils/prisma.client');
 const { sendEmail } = require('../services/email.service');
-const AppError = require('../utils/errors'); // Although errors here might just be logged
+const AppError = require('../utils/errors'); // Optional error utility
 
-
-// Schedule to run every day at 9:00 AM (adjust cron string as needed)
-// Cron format: second minute hour day-of-month month day-of-week
-// '0 9 * * *' = 1.42 AM daily
+// Schedule to run every day at 9:00 AM (Asia/Dhaka time)
 const schedulePaymentReminders = () => {
-    cron.schedule('0 9 * * *', async () => {
-        console.log('Running daily payment reminder job...');
+  cron.schedule(
+    '0 9 * * *',
+    async () => {
+      console.log('Running daily payment reminder job...');
 
-        try {
-            const now = new Date();
-            const reminderDateStart = new Date();
-            reminderDateStart.setDate(now.getDate() + 2); // Target due date is 2 days from now
-            reminderDateStart.setHours(0, 0, 0, 0); // Start of the target day
+      try {
+        // Calculate date range for 2 days ahead
+        const now = new Date();
+        const dueFrom = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+        const dueTo = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
 
-            const reminderDateEnd = new Date(reminderDateStart);
-            reminderDateEnd.setHours(23, 59, 59, 999); // End of the target day
+        const memberships = await prisma.membership.findMany({
+          where: {
+            isActive: true,
+            nextPaymentDueDate: {
+              gte: dueFrom,
+              lt: dueTo,
+            },
+          },
+          include: {
+            user: true,
+            group: {
+              include: {
+                admin: true, // Make sure admin details are included
+              },
+            },
+          },
+        });
 
-
-            // Find active memberships that are unpaid and due in 2 days
-            const membershipsToRemind = await prisma.membership.findMany({
-                where: {
-                    isActive: true,
-                    paymentStatusForCurrentCycle: 'UNPAID',
-                    group: {
-                        status: 'ACTIVE',
-                        nextPaymentDueDate: {
-                            gte: reminderDateStart, // Due date is >= start of target day
-                            lte: reminderDateEnd,   // Due date is <= end of target day
-                        },
-                    },
-                },
-                include: {
-                    user: { // Need user email and name
-                        select: { email: true, name: true }
-                    },
-                    group: { // Need group name, amount, due date
-                        select: { groupName: true, contributionAmount: true, nextPaymentDueDate: true }
-                    }
-                }
-            });
-
-            console.log(`Found ${membershipsToRemind.length} memberships needing payment reminders.`);
-
-            for (const membership of membershipsToRemind) {
-                if (!membership.user?.email || !membership.group?.nextPaymentDueDate) {
-                    console.warn(`Skipping reminder for membershipId ${membership.membershipId} due to missing user email or group due date.`);
-                    continue;
-                }
-
-                const { user, group } = membership;
-                const dueDateString = group.nextPaymentDueDate.toDateString();
-
-                sendEmail({
-                    to: user.email,
-                    subject: `Payment Reminder for Group "${group.groupName}"`,
-                    text: `Hi ${user.name},\n\nThis is a friendly reminder that your contribution of $<span class="math-inline">\{group\.contributionAmount\} for the group "</span>{group.groupName}" is due in 2 days on ${dueDateString}.\n\nPlease make your payment through the app.\n\nBest regards,\nThe ROSCA App Team`,
-                    html: `<p>Hi <span class="math-inline">\{user\.name\},</p\><p\>This is a friendly reminder that your contribution of <strong\></span><span class="math-inline">\{group\.contributionAmount\}</strong\> for the group "<strong\></span>{group.groupName}</strong>" is due in 2 days on <strong>${dueDateString}</strong>.</p><p>Please make your payment through the app.</p><p>Best regards,<br>The ROSCA App Team</p>`,
-                }).catch(err => console.error(`Failed to send payment reminder email to ${user.email} for group ${group.groupName}:`, err));
-
-                // Optional: Add a small delay between emails if sending many
-                await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
-            }
-
-            console.log('Payment reminder job finished.');
-
-        } catch (error) {
-             console.error('Error running payment reminder job:', error);
-             // Consider sending an alert to admin if the job fails critically
+        if (memberships.length === 0) {
+          console.log('No memberships due for payment in the next 2 days.');
+          return;
         }
-    }, {
-        scheduled: true,
-        timezone: "Asia/Dhaka" // Set your server's timezone or the target timezone
-    });
 
-    console.log('Payment reminder job scheduled.');
+        console.log(`Found ${memberships.length} memberships due for payment in the next 2 days.`);
+
+        for (const membership of memberships) {
+          const { user, group } = membership;
+          const dueDate =
+            membership.cyclePaymentCount === 0
+              ? group.currentCycleStartDate
+              : membership.nextPaymentDueDate;
+
+          if (!dueDate) {
+            console.warn(
+              `Skipping reminder for user ${user.email} in group "${group.groupName}" due to missing due date.`
+            );
+            continue;
+          }
+
+          const dueDateString = new Date(dueDate).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          });
+
+          // Send email to user
+          await sendEmail({
+            to: user.email,
+            subject: `Payment Reminder for Group "${group.groupName}"`,
+            text: `Hi ${user.name},\n\nThis is a friendly reminder that your contribution of $${group.contributionAmount} for the group "${group.groupName}" is due in 2 days on ${dueDateString}.\n\nPlease make your payment through the app.\n\nBest regards,\nThe ROSCA App Team`,
+            html: `<p>Hi <strong>${user.name}</strong>,</p><p>This is a friendly reminder that your contribution of <strong>$${group.contributionAmount}</strong> for the group "<strong>${group.groupName}</strong>" is due in 2 days on <strong>${dueDateString}</strong>.</p><p>Please make your payment through the app.</p><p>Best regards,<br>The ROSCA App Team</p>`,
+          }).catch((err) =>
+            console.error(
+              `Failed to send payment reminder email to ${user.email} for group ${group.groupName}:`,
+              err
+            )
+          );
+
+          // Send email to group admin
+          await sendEmail({
+            to: group.admin.email,
+            subject: `Member Payment Reminder - ${user.name}`,
+            text: `Hi ${group.admin.name},\n\nThis is a reminder that ${user.name}'s contribution of $${group.contributionAmount} for the group "${group.groupName}" is due in 2 days on ${dueDateString}.\n\nBest regards,\nThe ROSCA App Team`,
+            html: `<p>Hi <strong>${group.admin.name}</strong>,</p><p>This is a reminder that <strong>${user.name}</strong>'s contribution of <strong>$${group.contributionAmount}</strong> for the group "<strong>${group.groupName}</strong>" is due in 2 days on <strong>${dueDateString}</strong>.</p><p>Best regards,<br>The ROSCA App Team</p>`,
+          }).catch((err) =>
+            console.error(
+              `Failed to send admin reminder email to ${group.admin.email} for group ${group.groupName}:`,
+              err
+            )
+          );
+
+          console.log(
+            `Reminder sent to ${user.email} and admin ${group.admin.email} for group "${group.groupName}".`
+          );
+
+          await new Promise((resolve) => setTimeout(resolve, 100)); // Optional delay to avoid rate limits
+        }
+
+        console.log('Payment reminder job finished.');
+      } catch (error) {
+        console.error('Error running payment reminder job:', error);
+        // Optional: Notify dev/admin team
+      }
+    },
+    {
+      scheduled: true,
+      timezone: 'Asia/Dhaka',
+    }
+  );
+
+  console.log('Payment reminder job scheduled.');
 };
 
 module.exports = { schedulePaymentReminders };

@@ -98,8 +98,8 @@ const activateGroup = async (groupId, adminUserId) => {
         sendEmail({
             to: admin.email,
             subject: `Group "${updatedGroup.groupName}" Activated Successfully!`,
-            text: `Hi ${admin.name},\n\nThe group "${updatedGroup.groupName}" has been successfully activated.\n\nNext payment due date: ${updatedGroup.currentCycleStartDate}\n\nBest regards,\nThe ROSCA App Team`,
-            html: `<p>Hi ${admin.name},</p><p>The group "<strong>${updatedGroup.groupName}</strong>" has been successfully activated.</p><p>Next payment due date: <strong>${updatedGroup.currentCycleStartDate}</strong></p><p>Best regards,<br>The ROSCA App Team</p>`,
+            text: `Hi ${admin.name},\n\nThe group "${updatedGroup.groupName}" has been successfully activated.\n\nNext payment due date: ${updatedGroup.currentCycleStartDate}\n\nBest regards,\nAyuuto Savings App Team`,
+            html: `<p>Hi ${admin.name},</p><p>The group "<strong>${updatedGroup.groupName}</strong>" has been successfully activated.</p><p>Next payment due date: <strong>${updatedGroup.currentCycleStartDate}</strong></p><p>Best regards,<br>Ayuuto Savings App Team</p>`,
         }).catch(err => console.error("Failed to send group activation email:", err));
     }
 
@@ -113,8 +113,8 @@ const activateGroup = async (groupId, adminUserId) => {
             to: member.user.email,
             subject: `Group "${updatedGroup.groupName}" Activated!`,
 
-            text: `Hi ${member.user.name},\n\nThe group "${updatedGroup.groupName}" has been activated.\n\nNext payment due date: ${updatedGroup.currentCycleStartDate}\n\nBest regards,\nThe ROSCA App Team`,
-            html: `<p>Hi ${member.user.name},</p><p>The group "<strong>${updatedGroup.groupName}</strong>" has been activated.</p><p>Next payment due date: <strong>${updatedGroup.currentCycleStartDate}</strong></p><p>Best regards,<br>The ROSCA App Team</p>`,
+            text: `Hi ${member.user.name},\n\nThe group "${updatedGroup.groupName}" has been activated.\n\nNext payment due date: ${updatedGroup.currentCycleStartDate}\n\nBest regards,\nAyuuto Savings App Team`,
+            html: `<p>Hi ${member.user.name},</p><p>The group "<strong>${updatedGroup.groupName}</strong>" has been activated.</p><p>Next payment due date: <strong>${updatedGroup.currentCycleStartDate}</strong></p><p>Best regards,<br>Ayuuto Savings App Team</p>`,
         }).catch(err => console.error(`Failed to send activation email to ${member.user.email}:`, err));
     }
 
@@ -165,7 +165,7 @@ const getGroupDetailsForInvite = async (groupId) => {
 };
 
 
-//
+
 // const getGroupDetails = async (groupId, userId) => {
 //     // Fetch group details including active memberships and admin details
 //     const group = await prisma.group.findUnique({

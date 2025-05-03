@@ -87,8 +87,58 @@ const getAllUsers = async () => {
 };
 
 
+//filter history by userId. show 3) thing only 1)recent payment info(with groupname, amount, date) 2)recent lottery info((if he belong )with groupname, amount, date) 3)recent group info(with groupname, date)
+const userHistory = async (userId) => {
+    const user = await prisma.user.findUnique({
+        where: { userId },
+        include: {
+            memberships: {
+                include: {
+                    group: true,
+                },
+            },
+            lotteryWins: { // ✅ use the correct relation name
+                include: {
+                    group: true,
+                },
+            },
+        },
+    });
+
+    if (!user) {
+        throw new AppError('User not found', 404);
+    }
+
+    const paymentHistory = user.memberships.map((membership) => ({
+        groupName: membership.group.groupName,
+        amount: membership.group.contributionAmount,
+        date: membership.nextPaymentDueDate,
+    }));
+
+    const lotteryHistory = user.lotteryWins.map((lottery) => ({
+        groupName: lottery.group.groupName,
+        amount: lottery.potAmount,
+        date: lottery.lotteryDate,
+    }));
+
+    const groupHistory = user.memberships.map((membership) => ({
+        groupName: membership.group.groupName,
+        date: membership.joinDate,
+    }));
+
+    return {
+        paymentHistory,
+        lotteryHistory,
+        groupHistory,
+    };
+};
+
+
+
+
 module.exports = {
     createUser,
     getUserById,
-    getAllUsers
+    getAllUsers,
+    userHistory
 };
