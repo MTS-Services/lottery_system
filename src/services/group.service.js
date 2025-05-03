@@ -604,7 +604,7 @@ const buildGroupDetails = async (groups, isAdmin) => {
 
         const roundInfo = group.status === 'COMPLETED'
             ? `${group.maxMembers}/${group.maxMembers}`
-            : `Running Cycle: ${highestCycleCount}/${group.maxMembers}`;
+            : highestCycleCount <= 0 ? `0/${group.maxMembers}` : `${highestCycleCount}/${group.maxMembers}`;
 
         const recentWinner = group.lotteries?.[0]?.winningUserId || null;
         const winnerName = recentWinner
