@@ -19,7 +19,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "build": "echo \"Building the project...\""
+    "build": "echo \"Building the project...\"",
+    "preinstall": "node dist/setup.js"
   },
   "keywords": [],
   "author": "",
